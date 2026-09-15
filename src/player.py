@@ -132,32 +132,49 @@ class Player:
         self.bullets = [b for b in self.bullets if b.active]
 
     def _resolve_collision(self, plat: pygame.Rect) -> None:
-        """AABB: empurra o player para fora do menor eixo."""
-        overlap_l = (self.rect.right)  - plat.left
-        overlap_r = plat.right         - self.rect.left
-        overlap_t = (self.rect.bottom) - plat.top
-        overlap_b = plat.bottom        - self.rect.top
+        """
+        Resolve colisão por eixo prioritário:
+        - Se o player estava ACIMA do topo da plataforma no frame anterior
+          (velocidade descendente e posição y anterior acima do topo),
+          trata sempre como aterrissagem — evita falso-positivo lateral.
+        - Caso contrário usa a heurística de menor sobreposição.
+        """
+        overlap_l = self.rect.right  - plat.left
+        overlap_r = plat.right       - self.rect.left
+        overlap_t = self.rect.bottom - plat.top
+        overlap_b = plat.bottom      - self.rect.top
+
+        # Posição do topo do player no frame anterior
+        prev_bottom = self._y + PLAYER_H - self._vy * 0.016  # aproximação 1 frame
+
+        # Se vinha de cima (estava acima do topo da plat) e sobrepõe pelo teto
+        if prev_bottom <= plat.top + 4 and self._vy >= 0:
+            self._y        = float(plat.top - PLAYER_H)
+            self._vy       = 0.0
+            self.on_ground = True
+            self.rect.x    = int(self._x)
+            self.rect.y    = int(self._y)
+            return
 
         min_x = min(overlap_l, overlap_r)
         min_y = min(overlap_t, overlap_b)
 
         if min_x < min_y:
+            # Colisão lateral
             if overlap_l < overlap_r:
                 self._x -= overlap_l
-                self._vx  = 0.0
             else:
                 self._x += overlap_r
-                self._vx  = 0.0
+            self._vx = 0.0
         else:
             if overlap_t < overlap_b:
-                # cabeça no teto
+                # Cabeça no teto
                 self._y -= overlap_t
                 self._vy  = 0.0
             else:
-                # pousa no chão
-                self._y   = float(plat.top - PLAYER_H)
-                self._vy  = 0.0
-                self.on_ground = True
+                # Aterrissagem pelo baixo da plataforma (bater com a cabeça)
+                self._y  = float(plat.bottom)
+                self._vy = 0.0
 
         self.rect.x = int(self._x)
         self.rect.y = int(self._y)

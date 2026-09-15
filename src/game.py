@@ -89,6 +89,9 @@ class Game:
         self._hint_text    = ""
         self._hint_timer   = 0.0
         self._current_lvl_idx = 0
+        # Rects dos botões do diálogo (atualizados a cada frame de draw)
+        self._dialog_btn_main = None
+        self._dialog_btn_exit = None
 
     # ==========================================================
     #  Loop público
@@ -153,27 +156,50 @@ class Game:
                 self._next_level()
 
         elif s == GameState.DIALOG:
-            if event.type == pygame.KEYDOWN and event.key in (
-                    pygame.K_e, pygame.K_s, pygame.K_RETURN, pygame.K_SPACE):
-                if self._active_npc:
+            if self._active_npc:
+                # ESC fecha o diálogo em qualquer linha
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    self._active_npc.close()
+                    self._active_npc = None
+                    self._state = GameState.PLAYING
+                    self._dialog_btn_main = None
+                    self._dialog_btn_exit = None
+
+                # Teclado: E / S / ENTER / SPACE → avança ou fecha
+                elif event.type == pygame.KEYDOWN and event.key in (
+                        pygame.K_e, pygame.K_s, pygame.K_RETURN, pygame.K_SPACE):
                     more = self._active_npc.advance()
                     if not more:
                         self._active_npc = None
                         self._state = GameState.PLAYING
+                        self._dialog_btn_main = None
+                        self._dialog_btn_exit = None
+
+                # Mouse: verifica clique nos botões desenhados pelo draw_dialog
+                elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    if self._dialog_btn_main and self._dialog_btn_main.collidepoint(event.pos):
+                        more = self._active_npc.advance()
+                        if not more:
+                            self._active_npc = None
+                            self._state = GameState.PLAYING
+                            self._dialog_btn_main = None
+                            self._dialog_btn_exit = None
+                    elif self._dialog_btn_exit and self._dialog_btn_exit.collidepoint(event.pos):
+                        self._active_npc.close()
+                        self._active_npc = None
+                        self._state = GameState.PLAYING
+                        self._dialog_btn_main = None
+                        self._dialog_btn_exit = None
 
         elif s == GameState.QUIZ:
             lvl = self._level
             lvl.quiz.handle_event(event)
+            # PASSED: qualquer tecla ou clique fecha o quiz e entra na boss fight
             if lvl.quiz.state == QuizState.PASSED:
-                if event.type == pygame.KEYDOWN and event.key in (
-                        pygame.K_RETURN, pygame.K_SPACE):
+                if event.type in (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN):
                     lvl.quiz_passed = True
                     self._state = GameState.BOSS_FIGHT
-            elif lvl.quiz.state == QuizState.FAILED:
-                if event.type == pygame.KEYDOWN and event.key in (
-                        pygame.K_RETURN, pygame.K_SPACE):
-                    lvl.quiz.reset()
-                    self._state = GameState.PLAYING
+            # FAILED: tratado automaticamente em _update (quiz.reset + PLAYING)
 
         elif s == GameState.PLAYING:
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
@@ -205,6 +231,18 @@ class Game:
 
         if s == GameState.DIALOG:
             return   # player congelado durante diálogo
+
+        # ---- Quiz: precisa de update mesmo sem player ativo ----
+        if s == GameState.QUIZ:
+            lvl = self._level
+            new_state = lvl.quiz.update(dt)
+            # Quando falhou: fecha o quiz automaticamente após o feedback
+            if new_state == QuizState.FAILED:
+                lvl.quiz.reset()
+                self._state = GameState.PLAYING
+            # Quando passou: aguarda confirmação do jogador (ENTER/SPACE)
+            # tratada em _dispatch_event
+            return
 
         if s in (GameState.PLAYING, GameState.BOSS_FIGHT):
             # ---- Player ----
@@ -344,8 +382,10 @@ class Game:
 
         # Diálogo do NPC
         if s == GameState.DIALOG and self._active_npc:
-            self._active_npc.draw_dialog(
+            result = self._active_npc.draw_dialog(
                 self.screen, self.fonts.normal, self.fonts.small)
+            if result:
+                self._dialog_btn_main, self._dialog_btn_exit = result
 
         # Quiz
         if s == GameState.QUIZ:

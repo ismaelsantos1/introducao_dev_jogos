@@ -119,6 +119,11 @@ class NPC:
         dy = self.rect.centery - player.rect.centery
         return math.hypot(dx, dy) <= NPC_INTERACT_R
 
+    @property
+    def is_last_line(self):
+        """True quando estamos na última linha do diálogo."""
+        return self._cur >= len(self._lines) - 1
+
     def advance(self):
         """Avança linha; retorna False quando acabou."""
         self._cur += 1
@@ -127,6 +132,11 @@ class NPC:
             self.talked = True
             return False
         return True
+
+    def close(self):
+        """Fecha o diálogo imediatamente (botão Sair ou ESC)."""
+        self._cur   = len(self._lines) - 1
+        self.talked = True
 
     def reset(self):
         self._cur   = 0
@@ -186,25 +196,82 @@ class NPC:
                      (x - 8, y - 36 - pulse))
 
     def draw_dialog(self, surface, font_nm, font_sm):  # type: ignore
-        """Caixa de diálogo fixa no rodapé da tela."""
-        bx, by = 60, SCREEN_HEIGHT - 180
-        bw, bh = SCREEN_WIDTH - 120, 160
+        """
+        Caixa de diálogo fixa no rodapé da tela.
 
-        pygame.draw.rect(surface, WHITE,      (bx - 2, by - 2, bw + 4, bh + 4))
-        pygame.draw.rect(surface, DIALOG_BG,  (bx, by, bw, bh))
+        Botões exibidos:
+          - Sempre:            [E] / Clique → Continuar / Fechar
+          - Na última linha:   botão "Sair" destacado em vermelho
+          - Em qualquer linha: [ESC] fecha imediatamente
+        """
+        bx, by = 60, SCREEN_HEIGHT - 190
+        bw, bh = SCREEN_WIDTH - 120, 170
 
-        # Nome do NPC
+        # --- Fundo da caixa ---
+        pygame.draw.rect(surface, WHITE,     (bx - 2, by - 2, bw + 4, bh + 4))
+        pygame.draw.rect(surface, DIALOG_BG, (bx, by, bw, bh))
+
+        # --- Nome do NPC ---
         surface.blit(font_nm.render(self.name, True, NPC_COL), (bx + 10, by + 8))
 
-        # Linha atual
+        # --- Linha atual ---
         surface.blit(font_nm.render(self._lines[self._cur], True, WHITE),
                      (bx + 10, by + 36))
 
-        # Progresso
+        # --- Progresso ---
         cur, total = self.progress
         surface.blit(font_sm.render(f"{cur}/{total}", True, GRAY),
-                     (bx + bw - 50, by + bh - 22))
+                     (bx + bw - 56, by + bh - 50))
 
-        # Instrução
-        surface.blit(font_sm.render("[E] Continuar", True, LIGHTGRAY),
-                     (bx + 10, by + bh - 22))
+        # -------------------------------------------------------
+        #  Botões na parte inferior da caixa
+        # -------------------------------------------------------
+        btn_y   = by + bh - 38
+        btn_h   = 30
+        mx, my  = pygame.mouse.get_pos()
+        on_last = self.is_last_line
+
+        # ---- Botão principal: "Continuar" ou "Fechar" ----
+        if on_last:
+            btn_main_label = "  Fechar  [E]"
+            btn_main_col   = (40, 160, 60)
+            btn_main_hov   = (60, 200, 80)
+        else:
+            btn_main_label = "  Continuar  [E]"
+            btn_main_col   = (40, 80, 180)
+            btn_main_hov   = (60, 110, 220)
+
+        main_w   = 180
+        main_x   = bx + 10
+        main_rect = pygame.Rect(main_x, btn_y, main_w, btn_h)
+        main_hover = main_rect.collidepoint(mx, my)
+
+        pygame.draw.rect(surface,
+                         btn_main_hov if main_hover else btn_main_col,
+                         main_rect, border_radius=5)
+        pygame.draw.rect(surface, WHITE, main_rect, 1, border_radius=5)
+        surface.blit(font_sm.render(btn_main_label, True, WHITE),
+                     (main_x + 8, btn_y + 7))
+
+        # ---- Botão "Sair" (sempre visível) ----
+        exit_w    = 130
+        exit_x    = bx + 10 + main_w + 12
+        exit_rect = pygame.Rect(exit_x, btn_y, exit_w, btn_h)
+        exit_hover = exit_rect.collidepoint(mx, my)
+
+        exit_col = (160, 40, 40)
+        exit_hov = (200, 60, 60)
+        pygame.draw.rect(surface,
+                         exit_hov if exit_hover else exit_col,
+                         exit_rect, border_radius=5)
+        pygame.draw.rect(surface, WHITE, exit_rect, 1, border_radius=5)
+        surface.blit(font_sm.render("  Sair  [ESC]", True, WHITE),
+                     (exit_x + 8, btn_y + 7))
+
+        # ---- Dica de teclado discreta ----
+        surface.blit(font_sm.render("Clique ou use o teclado", True,
+                                    (100, 100, 130)),
+                     (bx + bw - 220, btn_y + 8))
+
+        # ---- Retorna os rects para detecção de clique no game.py ----
+        return main_rect, exit_rect

@@ -302,6 +302,12 @@ class Quiz:
         if self.state == QuizState.WAITING:
             return
 
+        # Se já foi resolvido (passed/failed), só desenha se ainda houver
+        # algo pendente de confirmação do jogador (PASSED aguarda clique).
+        # FAILED é fechado automaticamente pelo game._update — não desenha.
+        if self.state == QuizState.FAILED:
+            return
+
         # Overlay
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 200))
