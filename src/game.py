@@ -81,7 +81,7 @@ class Game:
         self.running = True
 
         self._state        = GameState.MENU
-        self._level        = Level()
+        self._level        = Level(0)
         self._player       = Player(*self._level.player_start)
         self._camera       = Camera()
         self._active_npc   = None   # NPC em diálogo
@@ -413,7 +413,7 @@ class Game:
     # ==========================================================
     def _start_game(self) -> None:
         self._current_lvl_idx = 0
-        self._level   = Level()
+        self._level   = Level(0)
         self._player  = Player(*self._level.player_start)
         self._camera  = Camera()
         self._active_npc  = None
@@ -424,8 +424,10 @@ class Game:
         self._level.reset()
         self._player = Player(*self._level.player_start)
         self._camera = Camera()
-        self._active_npc = None
-        self._hint_timer = 0.0
+        self._active_npc  = None
+        self._hint_timer  = 0.0
+        self._dialog_btn_main = None
+        self._dialog_btn_exit = None
         self._state = GameState.PLAYING
 
     def _next_level(self) -> None:
@@ -433,10 +435,10 @@ class Game:
         if self._current_lvl_idx >= 4:
             self._state = GameState.VICTORY
             return
-        # Fases 2-4: reutiliza a mesma estrutura de nível
-        # (num projeto completo, cada fase teria seu próprio Level)
-        self._level  = Level()
+        self._level  = Level(self._current_lvl_idx)   # carrega o pilar correto
         self._player = Player(*self._level.player_start)
         self._camera = Camera()
-        self._active_npc = None
+        self._active_npc  = None
+        self._dialog_btn_main = None
+        self._dialog_btn_exit = None
         self._state = GameState.PLAYING
